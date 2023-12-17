@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.github.krystianmuchla.mnemo.AppDatabase
+import com.github.krystianmuchla.mnemo.R
 import com.github.krystianmuchla.mnemo.databinding.NoteViewBinding
 
 class NoteFragment : Fragment() {
@@ -24,6 +25,12 @@ class NoteFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         view = NoteViewBinding.inflate(inflater)
+        view.addNote.setOnClickListener {
+            parentFragmentManager.beginTransaction()
+                .replace(R.id.container, AddNoteFragment())
+                .addToBackStack(null)
+                .commit()
+        }
         return view.root
     }
 }

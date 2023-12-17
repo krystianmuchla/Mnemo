@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 import java.time.Instant
 import java.util.UUID
 
-@Entity
+@Entity("note")
 data class Note(
     @PrimaryKey val id: UUID,
     @ColumnInfo("title") val title: String,
