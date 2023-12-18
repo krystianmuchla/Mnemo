@@ -6,28 +6,19 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.ViewModelProvider
-import com.github.krystianmuchla.mnemo.AppDatabase
-import com.github.krystianmuchla.mnemo.databinding.AddNoteViewBinding
+import com.github.krystianmuchla.mnemo.databinding.NewNoteViewBinding
 import com.github.krystianmuchla.mnemo.instant.InstantFactory
 import java.util.UUID
 
-class AddNoteFragment : Fragment() {
-    private lateinit var dao: NoteDao
-    private lateinit var model: NoteViewModel
-    private lateinit var view: AddNoteViewBinding
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        dao = AppDatabase.getInstance(requireContext()).noteDao()
-        model = ViewModelProvider(this)[NoteViewModel::class.java]
-    }
+class NewNoteFragment(private val requestKey: String) : Fragment() {
+    private lateinit var view: NewNoteViewBinding
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        view = AddNoteViewBinding.inflate(inflater)
+        view = NewNoteViewBinding.inflate(inflater)
         view.title.requestFocus()
         view.title.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
@@ -38,14 +29,18 @@ class AddNoteFragment : Fragment() {
         return view.root
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onDestroyView() {
+        super.onDestroyView()
         val title = view.title.text.toString()
         val content = view.content.text.toString()
         if (title.isBlank() && content.isBlank()) return
+        val bundle = Bundle(1)
+        bundle.putParcelable(requestKey, createNote(title, content))
+        parentFragmentManager.setFragmentResult(requestKey, bundle)
+    }
+
+    private fun createNote(title: String, content: String): Note {
         val creationTime = InstantFactory.create()
-        val note = Note(UUID.randomUUID(), title, content, creationTime, creationTime)
-        dao.create(note)
-        model.notes = dao.read()
+        return Note(UUID.randomUUID(), title, content, creationTime, creationTime)
     }
 }
