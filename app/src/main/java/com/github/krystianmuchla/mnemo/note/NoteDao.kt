@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import java.util.UUID
 
 @Dao
 interface NoteDao {
@@ -17,6 +18,6 @@ interface NoteDao {
     @Update
     fun update(vararg note: Note)
 
-    @Delete
-    fun delete(vararg note: Note)
+    @Query("DELETE FROM note WHERE id IN (:ids)")
+    fun delete(ids: Collection<UUID>)
 }
