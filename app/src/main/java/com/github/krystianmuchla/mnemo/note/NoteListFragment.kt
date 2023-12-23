@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -21,6 +20,11 @@ import java.util.UUID
 import java.util.stream.Collectors
 
 class NoteListFragment : Fragment() {
+    companion object {
+        private val ADD_NOTE_REQUEST_KEY = UUID.randomUUID().toString()
+        private val EDIT_NOTE_REQUEST_KEY = UUID.randomUUID().toString()
+    }
+
     private val selectedNotes = HashSet<UUID>()
     private lateinit var noteDao: NoteDao
     private lateinit var notes: LinkedList<Note>
@@ -37,15 +41,18 @@ class NoteListFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        onNewNoteResult { addNote(it) }
+        onNoteResult(ADD_NOTE_REQUEST_KEY) { addNote(it) }
+        onNoteResult(EDIT_NOTE_REQUEST_KEY) { updateNote(it) }
         val view = NoteListViewBinding.inflate(inflater)
         val onNoteClick: (Note, MaterialCardView) -> Unit = { note, noteView ->
             if (selectedNotes.isEmpty()) {
-                Toast.makeText(
-                    requireContext(),
-                    "Edit note: ${note.id}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                parentFragmentManager.beginTransaction()
+                    .replace(
+                        R.id.container,
+                        EditNoteFragment.newInstance(EDIT_NOTE_REQUEST_KEY, note)
+                    )
+                    .addToBackStack(null)
+                    .commit()
             } else if (selectedNotes.contains(note.id)) {
                 if (selectedNotes.size == 1) {
                     view.action.setImageDrawable(
@@ -81,11 +88,14 @@ class NoteListFragment : Fragment() {
         view.action.setOnClickListener {
             if (selectedNotes.isEmpty()) {
                 parentFragmentManager.beginTransaction()
-                    .replace(R.id.container, NewNoteFragment(javaClass.simpleName))
+                    .replace(R.id.container, AddNoteFragment.newInstance(ADD_NOTE_REQUEST_KEY))
                     .addToBackStack(null)
                     .commit()
             } else {
-                removeSelectedNotes(it as FloatingActionButton)
+                noteDao.delete(selectedNotes)
+                removeSelectedNotes()
+                it as FloatingActionButton
+                it.setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.add))
             }
         }
         return view.root
@@ -99,9 +109,9 @@ class NoteListFragment : Fragment() {
             .collect(Collectors.toCollection { LinkedList() })
     }
 
-    private fun onNewNoteResult(listener: (Note) -> (Unit)) {
+    private fun onNoteResult(requestKey: String, listener: (Note) -> (Unit)) {
         parentFragmentManager.setFragmentResultListener(
-            javaClass.simpleName,
+            requestKey,
             viewLifecycleOwner
         ) { requestId, bundle ->
             run {
@@ -112,25 +122,28 @@ class NoteListFragment : Fragment() {
     }
 
     private fun addNote(note: Note) {
-        noteDao.create(note)
-        val index = notes.indexOfFirst { it.modificationTime < note.modificationTime }
-        if (index < 0) {
-            notes.add(note)
-        } else {
-            notes.add(index, note)
-        }
+        var index = notes.indexOfFirst { it.modificationTime < note.modificationTime }
+        if (index < 0) index = 0
+        notes.add(index, note)
         adapter.notifyItemInserted(index)
     }
 
-    private fun removeSelectedNotes(actionView: FloatingActionButton) {
-        noteDao.delete(selectedNotes)
+    private fun updateNote(note: Note) {
+        val index = notes.indexOfFirst { it.id == note.id }
+        notes.removeAt(index)
+        var newIndex = notes.indexOfFirst { it.modificationTime < note.modificationTime }
+        if (newIndex < 0) newIndex = 0
+        notes.add(newIndex, note)
+        adapter.notifyItemMoved(index, newIndex)
+    }
+
+    private fun removeSelectedNotes() {
         selectedNotes.forEach {
             val index = notes.indexOfFirst { note -> note.id == it }
             notes.removeAt(index)
             adapter.notifyItemRemoved(index)
         }
         selectedNotes.clear()
-        actionView.setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.add))
     }
 
     private fun selectNote(noteId: UUID, noteView: MaterialCardView) {

@@ -13,7 +13,7 @@ class NoteListViewAdapter(
     private val onLongClick: (UUID, MaterialCardView) -> Boolean
 ) : RecyclerView.Adapter<NoteViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NoteViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.note_view, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.note_row_view, parent, false)
         return NoteViewHolder(view)
     }
 

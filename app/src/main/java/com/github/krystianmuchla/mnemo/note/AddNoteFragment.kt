@@ -6,19 +6,38 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.fragment.app.Fragment
-import com.github.krystianmuchla.mnemo.databinding.NewNoteViewBinding
-import com.github.krystianmuchla.mnemo.instant.InstantFactory
-import java.util.UUID
+import com.github.krystianmuchla.mnemo.AppDatabase
+import com.github.krystianmuchla.mnemo.databinding.NoteViewBinding
 
-class NewNoteFragment(private val requestKey: String) : Fragment() {
-    private lateinit var view: NewNoteViewBinding
+class AddNoteFragment : Fragment() {
+    companion object {
+        private const val REQUEST_KEY = "request_key"
+        fun newInstance(requestKey: String): AddNoteFragment {
+            return AddNoteFragment().apply {
+                arguments = Bundle().apply {
+                    putString(REQUEST_KEY, requestKey)
+                }
+            }
+        }
+    }
+
+    private lateinit var noteDao: NoteDao
+    private lateinit var requestKey: String
+    private lateinit var view: NoteViewBinding
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        noteDao = AppDatabase.getInstance(requireContext()).noteDao()
+        val arguments = requireArguments()
+        requestKey = arguments.getString(REQUEST_KEY)!!
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        view = NewNoteViewBinding.inflate(inflater)
+        view = NoteViewBinding.inflate(inflater)
         view.title.requestFocus()
         view.title.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
@@ -34,13 +53,10 @@ class NewNoteFragment(private val requestKey: String) : Fragment() {
         val title = view.title.text.toString()
         val content = view.content.text.toString()
         if (title.isBlank() && content.isBlank()) return
+        val note = note(title, content)
+        noteDao.create(note)
         val bundle = Bundle(1)
-        bundle.putParcelable(requestKey, createNote(title, content))
+        bundle.putParcelable(requestKey, note)
         parentFragmentManager.setFragmentResult(requestKey, bundle)
-    }
-
-    private fun createNote(title: String, content: String): Note {
-        val creationTime = InstantFactory.create()
-        return Note(UUID.randomUUID(), title, content, creationTime, creationTime)
     }
 }
