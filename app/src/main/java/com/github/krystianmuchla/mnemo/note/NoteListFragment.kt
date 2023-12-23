@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.github.krystianmuchla.mnemo.AppDatabase
 import com.github.krystianmuchla.mnemo.R
 import com.github.krystianmuchla.mnemo.databinding.NoteListViewBinding
+import com.github.krystianmuchla.mnemo.instant.InstantFactory
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.time.Instant
@@ -92,7 +93,7 @@ class NoteListFragment : Fragment() {
                     .addToBackStack(null)
                     .commit()
             } else {
-                noteDao.delete(selectedNotes)
+                noteDao.markAsDeleted(selectedNotes, InstantFactory.create())
                 removeSelectedNotes()
                 it as FloatingActionButton
                 it.setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.add))
