@@ -21,6 +21,6 @@ interface NoteDao {
     @Query("UPDATE note SET content = NULL, modification_time = :time WHERE id IN (:ids)")
     fun markAsDeleted(ids: Collection<UUID>, time: Instant)
 
-    @Query("DELETE FROM note WHERE id IN (:ids)")
-    fun delete(ids: Collection<UUID>)
+    @Query("DELETE FROM note WHERE id = :id")
+    fun delete(id: UUID)
 }
