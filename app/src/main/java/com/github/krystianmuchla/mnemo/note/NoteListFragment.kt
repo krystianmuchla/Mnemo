@@ -117,19 +117,14 @@ class NoteListFragment : Fragment() {
                             }
                         }
                     }
+                    noteDao.deleteEmptyNotes()
                     view.refresh.isRefreshing = false
                 },
                 {
                     view.refresh.isRefreshing = false
                 }
             )
-            request.setRetryPolicy(
-                DefaultRetryPolicy(
-                    0,
-                    DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
-                    DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
-                )
-            )
+            request.setRetryPolicy(DefaultRetryPolicy(10000, 0, 1f))
             requestQueue.add(request)
         }
         view.action.setOnClickListener {
@@ -139,7 +134,7 @@ class NoteListFragment : Fragment() {
                     .addToBackStack(null)
                     .commit()
             } else {
-                noteDao.markAsDeleted(selectedNotes, InstantFactory.create())
+                noteDao.emptyNotes(selectedNotes, InstantFactory.create())
                 removeSelectedNotes()
                 it as FloatingActionButton
                 it.setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.add))
