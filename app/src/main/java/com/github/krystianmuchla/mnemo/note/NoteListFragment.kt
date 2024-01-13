@@ -9,19 +9,15 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
-import com.android.volley.DefaultRetryPolicy
-import com.android.volley.Request.Method
 import com.android.volley.RequestQueue
-import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.github.krystianmuchla.mnemo.AppDatabase
+import com.github.krystianmuchla.mnemo.RequestFactory
 import com.github.krystianmuchla.mnemo.R
 import com.github.krystianmuchla.mnemo.databinding.NoteListViewBinding
 import com.github.krystianmuchla.mnemo.instant.InstantFactory
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import org.json.JSONArray
-import org.json.JSONObject
 import java.time.Instant
 import java.util.LinkedList
 import java.util.UUID
@@ -37,12 +33,17 @@ class NoteListFragment : Fragment() {
     private lateinit var noteDao: NoteDao
     private lateinit var notes: LinkedList<Note>
     private lateinit var requestQueue: RequestQueue
+    private lateinit var view: NoteListViewBinding
     private lateinit var adapter: NoteListViewAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         noteDao = AppDatabase.getInstance(requireContext()).noteDao()
-        notes = getNotes()
+        notes = noteDao.read()
+            .stream()
+            .filter { it.content != null }
+            .sorted(Comparator.comparing<Note?, Instant?> { it.modificationTime }.reversed())
+            .collect(Collectors.toCollection { LinkedList() })
         requestQueue = Volley.newRequestQueue(requireContext())
     }
 
@@ -53,67 +54,39 @@ class NoteListFragment : Fragment() {
     ): View {
         onNoteResult(ADD_NOTE_REQUEST_KEY) { addNote(it) }
         onNoteResult(EDIT_NOTE_REQUEST_KEY) { updateNote(it) }
-        val view = NoteListViewBinding.inflate(inflater)
-        val onNoteClick: (Note, MaterialCardView) -> Unit = { note, noteView ->
-            if (selectedNotes.isEmpty()) {
-                parentFragmentManager.beginTransaction()
-                    .replace(
-                        R.id.container,
-                        EditNoteFragment.newInstance(EDIT_NOTE_REQUEST_KEY, note)
-                    )
-                    .addToBackStack(null)
-                    .commit()
-            } else if (selectedNotes.contains(note.id)) {
-                if (selectedNotes.size == 1) {
-                    view.action.setImageDrawable(
-                        ContextCompat.getDrawable(
-                            requireContext(),
-                            R.drawable.add
-                        )
-                    )
-                }
-                deselectNote(note.id, noteView)
-            } else {
-                selectNote(note.id, noteView)
-            }
-        }
-        val onNoteLongClick: (UUID, MaterialCardView) -> Boolean = { noteId, noteView ->
-            if (selectedNotes.isEmpty()) {
-                selectNote(noteId, noteView)
-                view.action.setImageDrawable(
-                    ContextCompat.getDrawable(
-                        requireContext(),
-                        R.drawable.remove
-                    )
-                )
-                true
-            } else {
-                false
-            }
-        }
+        view = NoteListViewBinding.inflate(inflater)
+        setUpNoteList()
+        setUpListRefresh()
+        setUpActionButton()
+        return view.root
+    }
+
+    private fun setUpNoteList() {
         view.notes.layoutManager =
             StaggeredGridLayoutManager(2, LinearLayoutManager.VERTICAL)
-        adapter = NoteListViewAdapter(notes, onNoteClick, onNoteLongClick)
+        adapter = NoteListViewAdapter(notes, ::onNoteClick, ::onNoteLongClick)
         view.notes.adapter = adapter
+    }
+
+    private fun setUpListRefresh() {
+        view.refresh.isEnabled = false
+        requestQueue.add(RequestFactory.createHealthRequest { view.refresh.isEnabled = true })
         view.refresh.setOnRefreshListener {
             val notes = noteDao.read()
-            val request = JsonObjectRequest(
-                Method.PUT,
-                "http://192.168.0.127:8080/api/notes/sync",
-                createRequestBody(notes),
+            requestQueue.add(RequestFactory.createSyncNotesRequest(
+                notes,
                 { response ->
-                    val notesResponse = notes(response.getJSONArray("notes"))
-                    notesResponse.forEach { noteResponse ->
-                        if (noteResponse.content == null) {
-                            noteDao.delete(noteResponse.id)
-                            removeNote(noteResponse.id)
+                    response.forEach { note ->
+                        if (note.content == null) {
+                            noteDao.delete(note.id)
+                            removeNote(note.id)
                         } else {
-                            if (notes.indexOfFirst { it.id == noteResponse.id } < 0) {
-                                noteDao.create(noteResponse)
-                                addNote(noteResponse)
+                            if (notes.indexOfFirst { it.id == note.id } < 0) {
+                                noteDao.create(note)
+                                addNote(note)
                             } else {
-                                noteDao.update(noteResponse)
-                                updateNote(noteResponse)
+                                noteDao.update(note)
+                                updateNote(note)
                             }
                         }
                     }
@@ -123,10 +96,11 @@ class NoteListFragment : Fragment() {
                 {
                     view.refresh.isRefreshing = false
                 }
-            )
-            request.setRetryPolicy(DefaultRetryPolicy(10000, 0, 1f))
-            requestQueue.add(request)
+            ))
         }
+    }
+
+    private fun setUpActionButton() {
         view.action.setOnClickListener {
             if (selectedNotes.isEmpty()) {
                 parentFragmentManager.beginTransaction()
@@ -140,15 +114,6 @@ class NoteListFragment : Fragment() {
                 it.setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.add))
             }
         }
-        return view.root
-    }
-
-    private fun getNotes(): LinkedList<Note> {
-        return noteDao.read()
-            .stream()
-            .filter { it.content != null }
-            .sorted(Comparator.comparing<Note?, Instant?> { it.modificationTime }.reversed())
-            .collect(Collectors.toCollection { LinkedList() })
     }
 
     private fun onNoteResult(requestKey: String, listener: (Note) -> (Unit)) {
@@ -161,6 +126,44 @@ class NoteListFragment : Fragment() {
                 note?.let(listener)
             }
         }
+    }
+
+    private fun onNoteClick(note: Note, noteView: MaterialCardView) {
+        if (selectedNotes.isEmpty()) {
+            parentFragmentManager.beginTransaction()
+                .replace(
+                    R.id.container,
+                    EditNoteFragment.newInstance(EDIT_NOTE_REQUEST_KEY, note)
+                )
+                .addToBackStack(null)
+                .commit()
+        } else if (selectedNotes.contains(note.id)) {
+            if (selectedNotes.size == 1) {
+                view.action.setImageDrawable(
+                    ContextCompat.getDrawable(
+                        requireContext(),
+                        R.drawable.add
+                    )
+                )
+            }
+            deselectNote(note.id, noteView)
+        } else {
+            selectNote(note.id, noteView)
+        }
+    }
+
+    private fun onNoteLongClick(noteId: UUID, noteView: MaterialCardView): Boolean {
+        if (selectedNotes.isEmpty()) {
+            selectNote(noteId, noteView)
+            view.action.setImageDrawable(
+                ContextCompat.getDrawable(
+                    requireContext(),
+                    R.drawable.remove
+                )
+            )
+            return true
+        }
+        return false
     }
 
     private fun addNote(note: Note) {
@@ -200,21 +203,5 @@ class NoteListFragment : Fragment() {
     private fun deselectNote(noteId: UUID, noteView: MaterialCardView) {
         noteView.strokeColor = Color.TRANSPARENT
         selectedNotes.remove(noteId)
-    }
-
-    private fun createRequestBody(notes: List<Note>): JSONObject {
-        val requestBody = JSONObject()
-        val notesRequest = JSONArray()
-        notes.forEach {
-            val noteRequest = JSONObject()
-            noteRequest.put(Note.ID, it.id.toString())
-            noteRequest.put(Note.TITLE, it.title)
-            noteRequest.put(Note.CONTENT, it.content)
-            noteRequest.put(Note.CREATION_TIME, it.creationTime?.toString())
-            noteRequest.put(Note.MODIFICATION_TIME, it.modificationTime.toString())
-            notesRequest.put(noteRequest)
-        }
-        requestBody.put("notes", notesRequest)
-        return requestBody
     }
 }
