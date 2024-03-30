@@ -1,6 +1,7 @@
 <resources>
 
     <style name="Theme.Mnemo" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="colorSecondary">@android:color/primary_text_dark</item>
+        <item name="colorPrimary">@android:color/white</item>
+        <item name="colorSecondary">@android:color/white</item>
     </style>
 </resources>

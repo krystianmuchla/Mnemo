@@ -12,6 +12,7 @@ import com.github.krystianmuchla.mnemo.databinding.NoteViewBinding
 class AddNoteFragment : Fragment() {
     companion object {
         private const val REQUEST_KEY = "request_key"
+
         fun newInstance(requestKey: String): AddNoteFragment {
             return AddNoteFragment().apply {
                 arguments = Bundle().apply {
@@ -52,11 +53,13 @@ class AddNoteFragment : Fragment() {
         super.onDestroyView()
         val title = view.title.text.toString()
         val content = view.content.text.toString()
-        if (title.isBlank() && content.isBlank()) return
+        if (title.isBlank() && content.isBlank()) {
+            return
+        }
         val note = note(title, content)
         noteDao.create(note)
         val bundle = Bundle(1)
-        bundle.putParcelable(requestKey, note)
+        bundle.putParcelable("note", note)
         parentFragmentManager.setFragmentResult(requestKey, bundle)
     }
 }

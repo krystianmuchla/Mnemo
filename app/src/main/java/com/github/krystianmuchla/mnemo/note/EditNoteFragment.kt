@@ -51,13 +51,15 @@ class EditNoteFragment : Fragment() {
         super.onDestroyView()
         val title = view.title.text.toString()
         val content = view.content.text.toString()
-        if (title == note.title && content == note.content) return
+        if (title == note.title && content == note.content) {
+            return
+        }
         note.title = title
         note.content = content
         note.modificationTime = InstantFactory.create()
         noteDao.update(note)
-        val bundle = Bundle(1)
-        bundle.putParcelable(requestKey, note)
+        val bundle = Bundle()
+        bundle.putParcelable("note", note)
         parentFragmentManager.setFragmentResult(requestKey, bundle)
     }
 }

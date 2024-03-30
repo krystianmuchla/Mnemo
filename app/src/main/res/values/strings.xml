@@ -1,5 +1,8 @@
 <resources>
     <string name="app_name">Mnemo</string>
+    <string name="login">Login</string>
+    <string name="password">Password</string>
+    <string name="sign_in">Sign in</string>
     <string name="title">Title</string>
     <string name="content">Content</string>
     <string name="action">Action</string>

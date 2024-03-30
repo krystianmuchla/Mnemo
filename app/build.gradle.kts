@@ -44,9 +44,12 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.core:core-ktx:1.12.0")
+    runtimeOnly("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0-alpha01")
-    implementation("com.android.volley:volley:1.2.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
     implementation("com.google.android.material:material:1.11.0")
+    implementation("com.squareup.retrofit2:converter-jackson:2.11.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
 }

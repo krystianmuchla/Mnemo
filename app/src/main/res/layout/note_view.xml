@@ -14,6 +14,7 @@
         android:autofillHints="title"
         android:hint="@string/title"
         android:inputType="text"
+        android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
         tools:ignore="LabelFor" />
 
@@ -21,7 +22,7 @@
         android:id="@+id/content"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:autofillHints="title"
+        android:autofillHints="content"
         android:background="@null"
         android:gravity="top"
         android:hint="@string/content"
@@ -29,5 +30,4 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@id/title"
         tools:ignore="LabelFor" />
-
 </androidx.constraintlayout.widget.ConstraintLayout>

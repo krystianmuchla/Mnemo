@@ -5,19 +5,28 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
-import com.android.volley.RequestQueue
-import com.android.volley.toolbox.Volley
 import com.github.krystianmuchla.mnemo.AppDatabase
-import com.github.krystianmuchla.mnemo.RequestFactory
 import com.github.krystianmuchla.mnemo.R
 import com.github.krystianmuchla.mnemo.databinding.NoteListViewBinding
+import com.github.krystianmuchla.mnemo.http.ApiService
+import com.github.krystianmuchla.mnemo.http.ServiceFactory
+import com.github.krystianmuchla.mnemo.http.id.SignInRequest
+import com.github.krystianmuchla.mnemo.http.note.NoteRequest
+import com.github.krystianmuchla.mnemo.http.note.SyncNotesRequest
+import com.github.krystianmuchla.mnemo.id.Session
+import com.github.krystianmuchla.mnemo.id.SessionDao
+import com.github.krystianmuchla.mnemo.id.SignInDialogFragment
 import com.github.krystianmuchla.mnemo.instant.InstantFactory
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import kotlinx.coroutines.launch
+import java.io.IOException
 import java.time.Instant
 import java.util.LinkedList
 import java.util.UUID
@@ -27,24 +36,28 @@ class NoteListFragment : Fragment() {
     companion object {
         private val ADD_NOTE_REQUEST_KEY = UUID.randomUUID().toString()
         private val EDIT_NOTE_REQUEST_KEY = UUID.randomUUID().toString()
+        private val SIGN_IN_REQUEST_KEY = UUID.randomUUID().toString()
     }
 
     private val selectedNotes = HashSet<UUID>()
     private lateinit var noteDao: NoteDao
     private lateinit var notes: LinkedList<Note>
-    private lateinit var requestQueue: RequestQueue
+    private lateinit var sessionDao: SessionDao
+    private lateinit var apiService: ApiService
     private lateinit var view: NoteListViewBinding
     private lateinit var adapter: NoteListViewAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        noteDao = AppDatabase.getInstance(requireContext()).noteDao()
+        val appDatabase = AppDatabase.getInstance(requireContext())
+        noteDao = appDatabase.noteDao()
         notes = noteDao.read()
             .stream()
-            .filter { it.content != null }
+            .filter { it.hasContent() }
             .sorted(Comparator.comparing<Note?, Instant?> { it.modificationTime }.reversed())
             .collect(Collectors.toCollection { LinkedList() })
-        requestQueue = Volley.newRequestQueue(requireContext())
+        sessionDao = appDatabase.sessionDao()
+        apiService = ServiceFactory.getInstance().create(ApiService::class.java)
     }
 
     override fun onCreateView(
@@ -54,6 +67,7 @@ class NoteListFragment : Fragment() {
     ): View {
         onNoteResult(ADD_NOTE_REQUEST_KEY) { addNote(it) }
         onNoteResult(EDIT_NOTE_REQUEST_KEY) { updateNote(it) }
+        onSignInResult()
         view = NoteListViewBinding.inflate(inflater)
         setUpNoteList()
         setUpListRefresh()
@@ -70,33 +84,52 @@ class NoteListFragment : Fragment() {
 
     private fun setUpListRefresh() {
         view.refresh.isEnabled = false
-        requestQueue.add(RequestFactory.createHealthRequest { view.refresh.isEnabled = true })
+        lifecycleScope.launch {
+            try {
+                val response = apiService.getHealth()
+                if (response.isSuccessful) {
+                    view.refresh.isEnabled = true
+                }
+            } catch (_: IOException) {
+            }
+        }
         view.refresh.setOnRefreshListener {
-            val notes = noteDao.read()
-            requestQueue.add(RequestFactory.createSyncNotesRequest(
-                notes,
-                { response ->
-                    response.forEach { note ->
-                        if (note.content == null) {
-                            noteDao.delete(note.id)
-                            removeNote(note.id)
-                        } else {
-                            if (notes.indexOfFirst { it.id == note.id } < 0) {
-                                noteDao.create(note)
-                                addNote(note)
+            val session = sessionDao.read()
+            val request = SyncNotesRequest(noteDao.read().map { NoteRequest.from(it) })
+            lifecycleScope.launch {
+                try {
+                    val response = apiService.syncNotes(session?.asCookie(), request)
+                    if (response.isSuccessful) {
+                        val responseBody = response.body()!!
+                        val notes = responseBody.notes.map { it.asNote() }
+                        notes.forEach { note ->
+                            if (note.hasContent()) {
+                                if (notes.indexOfFirst { it.id == note.id } < 0) {
+                                    noteDao.create(note)
+                                    addNote(note)
+                                } else {
+                                    noteDao.update(note)
+                                    updateNote(note)
+                                }
                             } else {
-                                noteDao.update(note)
-                                updateNote(note)
+                                noteDao.delete(note.id)
+                                removeNote(note.id)
                             }
                         }
+                        noteDao.deleteEmptyNotes()
+                    } else if (response.code() == 401) {
+                        SignInDialogFragment.newInstance(SIGN_IN_REQUEST_KEY)
+                            .show(childFragmentManager)
+                    } else {
+                        Toast.makeText(requireContext(), "External error", Toast.LENGTH_SHORT)
+                            .show()
                     }
-                    noteDao.deleteEmptyNotes()
-                    view.refresh.isRefreshing = false
-                },
-                {
+                } catch (_: Exception) {
+                    Toast.makeText(requireContext(), "Error", Toast.LENGTH_SHORT).show()
+                } finally {
                     view.refresh.isRefreshing = false
                 }
-            ))
+            }
         }
     }
 
@@ -120,10 +153,44 @@ class NoteListFragment : Fragment() {
         parentFragmentManager.setFragmentResultListener(
             requestKey,
             viewLifecycleOwner
-        ) { requestId, bundle ->
-            run {
-                val note = bundle.getParcelable<Note>(requestId)
-                note?.let(listener)
+        ) { _, bundle ->
+            val note = bundle.getParcelable<Note>("note")
+            note?.let(listener)
+        }
+    }
+
+    private fun onSignInResult() {
+        childFragmentManager.setFragmentResultListener(
+            SIGN_IN_REQUEST_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            view.refresh.isRefreshing = true
+            val login = bundle.getString("login")!!
+            val password = bundle.getString("password")!!
+            val request = SignInRequest(login, password)
+            lifecycleScope.launch {
+                try {
+                    val response = apiService.signIn(request)
+                    if (response.isSuccessful) {
+                        val headers = response.headers().toMultimap()
+                        val cookies = headers["Set-Cookie"]!!
+                        val session = Session.from(cookies)!!
+                        sessionDao.delete()
+                        sessionDao.create(session)
+                    } else if (response.code() == 401) {
+                        Toast.makeText(requireContext(), "Bad credentials", Toast.LENGTH_SHORT)
+                            .show()
+                        SignInDialogFragment.newInstance(SIGN_IN_REQUEST_KEY)
+                            .show(childFragmentManager)
+                    } else {
+                        Toast.makeText(requireContext(), "External error", Toast.LENGTH_SHORT)
+                            .show()
+                    }
+                } catch (_: IOException) {
+                    Toast.makeText(requireContext(), "Error", Toast.LENGTH_SHORT).show()
+                } finally {
+                    view.refresh.isRefreshing = false
+                }
             }
         }
     }
