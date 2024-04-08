@@ -1,8 +1,7 @@
 package com.github.krystianmuchla.mnemo.http
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import retrofit2.Retrofit
-import retrofit2.converter.jackson.JacksonConverterFactory
+import retrofit2.converter.gson.GsonConverterFactory
 
 abstract class ServiceFactory {
     companion object {
@@ -13,7 +12,7 @@ abstract class ServiceFactory {
             return INSTANCE ?: synchronized(this) {
                 val instance = Retrofit.Builder()
                     .baseUrl("http://192.168.0.69:80")
-                    .addConverterFactory(JacksonConverterFactory.create(jacksonObjectMapper()))
+                    .addConverterFactory(GsonConverterFactory.create())
                     .build()
                 INSTANCE = instance
                 instance

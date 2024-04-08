@@ -1,8 +1,10 @@
 package com.github.krystianmuchla.mnemo.http.note
 
+import androidx.annotation.Keep
 import com.github.krystianmuchla.mnemo.note.Note
 import java.util.UUID
 
+@Keep
 data class NoteRequest(
     val id: UUID,
     val title: String?,
