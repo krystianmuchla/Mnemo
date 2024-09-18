@@ -9,8 +9,7 @@ data class NoteRequest(
     val id: UUID,
     val title: String?,
     val content: String?,
-    val creationTime: String?,
-    val modificationTime: String
+    val contentsModificationTime: String
 ) {
     companion object {
         fun from(note: Note): NoteRequest {
@@ -18,8 +17,7 @@ data class NoteRequest(
                 note.id,
                 note.title,
                 note.content,
-                note.creationTime?.toString(),
-                note.modificationTime.toString()
+                note.contentsModificationTime.toString()
             )
         }
     }

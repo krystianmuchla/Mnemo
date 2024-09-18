@@ -56,7 +56,7 @@ class EditNoteFragment : Fragment() {
         }
         note.title = title
         note.content = content
-        note.modificationTime = InstantFactory.create()
+        note.contentsModificationTime = InstantFactory.create()
         noteDao.update(note)
         val bundle = Bundle()
         bundle.putParcelable("note", note)

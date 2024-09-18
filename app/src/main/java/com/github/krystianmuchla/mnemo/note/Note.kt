@@ -15,8 +15,7 @@ data class Note(
     @PrimaryKey val id: UUID,
     @ColumnInfo("title") var title: String?,
     @ColumnInfo("content") var content: String?,
-    @ColumnInfo("creation_time") val creationTime: Instant?,
-    @ColumnInfo("modification_time") var modificationTime: Instant
+    @ColumnInfo("modification_time") var contentsModificationTime: Instant
 ) : Parcelable {
     fun hasContent(): Boolean {
         return content != null
@@ -24,6 +23,5 @@ data class Note(
 }
 
 fun note(title: String, content: String): Note {
-    val creationTime = InstantFactory.create()
-    return Note(UUID.randomUUID(), title, content, creationTime, creationTime)
+    return Note(UUID.randomUUID(), title, content, InstantFactory.create())
 }

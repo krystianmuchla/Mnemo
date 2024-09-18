@@ -20,6 +20,6 @@ interface ApiService {
         @Body request: SyncNotesRequest
     ): Response<NoteSyncResponse>
 
-    @POST("api/id/sign_in")
+    @POST("api/sessions")
     suspend fun signIn(@Body request: SignInRequest): Response<Void>
 }

@@ -54,7 +54,8 @@ class NoteListFragment : Fragment() {
         notes = noteDao.read()
             .stream()
             .filter { it.hasContent() }
-            .sorted(Comparator.comparing<Note?, Instant?> { it.modificationTime }.reversed())
+            .sorted(Comparator.comparing<Note?, Instant?> { it.contentsModificationTime }
+                .reversed())
             .collect(Collectors.toCollection { LinkedList() })
         sessionDao = appDatabase.sessionDao()
         apiService = ServiceFactory.getInstance().create(ApiService::class.java)
@@ -101,19 +102,21 @@ class NoteListFragment : Fragment() {
                     val response = apiService.syncNotes(session?.asCookie(), request)
                     if (response.isSuccessful) {
                         val responseBody = response.body()!!
-                        val notes = responseBody.notes.map { it.asNote() }
-                        notes.forEach { note ->
-                            if (note.hasContent()) {
-                                if (notes.indexOfFirst { it.id == note.id } < 0) {
-                                    noteDao.create(note)
-                                    addNote(note)
-                                } else {
-                                    noteDao.update(note)
-                                    updateNote(note)
+                        val externalNotes = responseBody.notes.map { it.asNote() }
+                        externalNotes.forEach { externalNote ->
+                            if (notes.indexOfFirst { it.id == externalNote.id } < 0) {
+                                if (externalNote.hasContent()) {
+                                    noteDao.create(externalNote)
+                                    addNote(externalNote)
                                 }
                             } else {
-                                noteDao.delete(note.id)
-                                removeNote(note.id)
+                                if (externalNote.hasContent()) {
+                                    noteDao.update(externalNote)
+                                    updateNote(externalNote)
+                                } else {
+                                    noteDao.delete(externalNote.id)
+                                    removeNote(externalNote.id)
+                                }
                             }
                         }
                         noteDao.deleteEmptyNotes()
@@ -234,7 +237,8 @@ class NoteListFragment : Fragment() {
     }
 
     private fun addNote(note: Note) {
-        var index = notes.indexOfFirst { it.modificationTime < note.modificationTime }
+        var index =
+            notes.indexOfFirst { it.contentsModificationTime < note.contentsModificationTime }
         if (index < 0) index = notes.size
         notes.add(index, note)
         adapter.notifyItemInserted(index)
@@ -244,7 +248,8 @@ class NoteListFragment : Fragment() {
         val index = notes.indexOfFirst { it.id == note.id }
         if (index < 0) return
         notes.removeAt(index)
-        var newIndex = notes.indexOfFirst { it.modificationTime < note.modificationTime }
+        var newIndex =
+            notes.indexOfFirst { it.contentsModificationTime < note.contentsModificationTime }
         if (newIndex < 0) newIndex = notes.size
         notes.add(newIndex, note)
         adapter.notifyItemMoved(index, newIndex)

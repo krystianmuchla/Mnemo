@@ -10,16 +10,14 @@ data class NoteResponse(
     val id: UUID,
     val title: String?,
     val content: String?,
-    val creationTime: String?,
-    val modificationTime: String
+    val contentsModificationTime: String
 ) {
     fun asNote(): Note {
         return Note(
             id,
             title,
             content,
-            creationTime?.let { Instant.parse(it) },
-            Instant.parse(modificationTime)
+            Instant.parse(contentsModificationTime)
         )
     }
 }
