@@ -90,49 +90,13 @@ class NoteListFragment : Fragment() {
                 val response = apiService.getHealth()
                 if (response.isSuccessful) {
                     view.refresh.isEnabled = true
+                    syncNotes()
                 }
             } catch (_: IOException) {
             }
         }
         view.refresh.setOnRefreshListener {
-            val session = sessionDao.read()
-            val request = SyncNotesRequest(noteDao.read().map { NoteRequest.from(it) })
-            lifecycleScope.launch {
-                try {
-                    val response = apiService.syncNotes(session?.asCookie(), request)
-                    if (response.isSuccessful) {
-                        val responseBody = response.body()!!
-                        val externalNotes = responseBody.notes.map { it.asNote() }
-                        externalNotes.forEach { externalNote ->
-                            if (notes.indexOfFirst { it.id == externalNote.id } < 0) {
-                                if (externalNote.hasContent()) {
-                                    noteDao.create(externalNote)
-                                    addNote(externalNote)
-                                }
-                            } else {
-                                if (externalNote.hasContent()) {
-                                    noteDao.update(externalNote)
-                                    updateNote(externalNote)
-                                } else {
-                                    noteDao.delete(externalNote.id)
-                                    removeNote(externalNote.id)
-                                }
-                            }
-                        }
-                        noteDao.deleteEmptyNotes()
-                    } else if (response.code() == 401) {
-                        SignInDialogFragment.newInstance(SIGN_IN_REQUEST_KEY)
-                            .show(childFragmentManager)
-                    } else {
-                        Toast.makeText(requireContext(), "External error", Toast.LENGTH_SHORT)
-                            .show()
-                    }
-                } catch (_: Exception) {
-                    Toast.makeText(requireContext(), "Error", Toast.LENGTH_SHORT).show()
-                } finally {
-                    view.refresh.isRefreshing = false
-                }
-            }
+            syncNotes()
         }
     }
 
@@ -144,8 +108,8 @@ class NoteListFragment : Fragment() {
                     .addToBackStack(null)
                     .commit()
             } else {
-                noteDao.emptyNotes(selectedNotes, InstantFactory.create())
                 removeSelectedNotes()
+                syncNotes()
                 it as FloatingActionButton
                 it.setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.add))
             }
@@ -159,6 +123,7 @@ class NoteListFragment : Fragment() {
         ) { _, bundle ->
             val note = bundle.getParcelable<Note>("note")
             note?.let(listener)
+            syncNotes()
         }
     }
 
@@ -180,6 +145,7 @@ class NoteListFragment : Fragment() {
                         val session = Session.from(cookies)!!
                         sessionDao.delete()
                         sessionDao.create(session)
+                        syncNotes()
                     } else if (response.code() == 401) {
                         Toast.makeText(requireContext(), "Bad credentials", Toast.LENGTH_SHORT)
                             .show()
@@ -236,7 +202,52 @@ class NoteListFragment : Fragment() {
         return false
     }
 
+    private fun syncNotes() {
+        if (!view.refresh.isEnabled) {
+            return
+        }
+        if (!view.refresh.isRefreshing) {
+            view.refresh.isRefreshing = true
+        }
+        val session = sessionDao.read()
+        val request = SyncNotesRequest(noteDao.read().map { NoteRequest.from(it) })
+        lifecycleScope.launch {
+            try {
+                val response = apiService.syncNotes(session?.asCookie(), request)
+                if (response.isSuccessful) {
+                    val responseBody = response.body()!!
+                    val externalNotes = responseBody.notes.map { it.asNote() }
+                    externalNotes.forEach { externalNote ->
+                        if (notes.indexOfFirst { it.id == externalNote.id } < 0) {
+                            if (externalNote.hasContent()) {
+                                addNote(externalNote)
+                            }
+                        } else {
+                            if (externalNote.hasContent()) {
+                                updateNote(externalNote)
+                            } else {
+                                deleteNote(externalNote.id)
+                            }
+                        }
+                    }
+                    noteDao.deleteRemoved()
+                } else if (response.code() == 401) {
+                    SignInDialogFragment.newInstance(SIGN_IN_REQUEST_KEY)
+                        .show(childFragmentManager)
+                } else {
+                    Toast.makeText(requireContext(), "External error", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            } catch (_: Exception) {
+                Toast.makeText(requireContext(), "Error", Toast.LENGTH_SHORT).show()
+            } finally {
+                view.refresh.isRefreshing = false
+            }
+        }
+    }
+
     private fun addNote(note: Note) {
+        noteDao.create(note)
         var index =
             notes.indexOfFirst { it.contentsModificationTime < note.contentsModificationTime }
         if (index < 0) index = notes.size
@@ -245,6 +256,7 @@ class NoteListFragment : Fragment() {
     }
 
     private fun updateNote(note: Note) {
+        noteDao.update(note)
         val index = notes.indexOfFirst { it.id == note.id }
         if (index < 0) return
         notes.removeAt(index)
@@ -255,12 +267,21 @@ class NoteListFragment : Fragment() {
         adapter.notifyItemMoved(index, newIndex)
     }
 
+    private fun deleteNote(noteId: UUID) {
+        noteDao.delete(noteId)
+        val index = notes.indexOfFirst { it.id == noteId }
+        if (index < 0) return
+        notes.removeAt(index)
+        adapter.notifyItemRemoved(index)
+    }
+
     private fun removeSelectedNotes() {
         selectedNotes.forEach { removeNote(it) }
         selectedNotes.clear()
     }
 
     private fun removeNote(noteId: UUID) {
+        noteDao.remove(noteId, InstantFactory.create())
         val index = notes.indexOfFirst { it.id == noteId }
         if (index < 0) return
         notes.removeAt(index)

@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.fragment.app.Fragment
-import com.github.krystianmuchla.mnemo.AppDatabase
 import com.github.krystianmuchla.mnemo.databinding.NoteViewBinding
 
 class AddNoteFragment : Fragment() {
@@ -22,13 +21,11 @@ class AddNoteFragment : Fragment() {
         }
     }
 
-    private lateinit var noteDao: NoteDao
     private lateinit var requestKey: String
     private lateinit var view: NoteViewBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        noteDao = AppDatabase.getInstance(requireContext()).noteDao()
         val arguments = requireArguments()
         requestKey = arguments.getString(REQUEST_KEY)!!
     }
@@ -57,7 +54,6 @@ class AddNoteFragment : Fragment() {
             return
         }
         val note = note(title, content)
-        noteDao.create(note)
         val bundle = Bundle(1)
         bundle.putParcelable("note", note)
         parentFragmentManager.setFragmentResult(requestKey, bundle)

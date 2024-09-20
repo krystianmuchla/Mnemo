@@ -18,12 +18,12 @@ interface NoteDao {
     @Update
     fun update(vararg note: Note)
 
-    @Query("UPDATE note SET content = NULL, modification_time = :modificationTime WHERE id IN (:ids)")
-    fun emptyNotes(ids: Collection<UUID>, modificationTime: Instant)
-
-    @Query("DELETE FROM note WHERE content IS NULL")
-    fun deleteEmptyNotes()
+    @Query("UPDATE note SET content = NULL, modification_time = :modificationTime WHERE id = :id")
+    fun remove(id: UUID, modificationTime: Instant)
 
     @Query("DELETE FROM note WHERE id = :id")
     fun delete(id: UUID)
+
+    @Query("DELETE FROM note WHERE content IS NULL")
+    fun deleteRemoved()
 }

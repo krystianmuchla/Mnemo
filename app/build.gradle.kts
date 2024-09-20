@@ -44,7 +44,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.core:core-ktx:1.13.1")
-    runtimeOnly("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
+    runtimeOnly("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0-alpha01")
