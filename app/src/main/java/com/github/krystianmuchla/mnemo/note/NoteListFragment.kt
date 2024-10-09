@@ -39,6 +39,7 @@ class NoteListFragment : Fragment() {
         private val SIGN_IN_REQUEST_KEY = UUID.randomUUID().toString()
     }
 
+    private var online = false
     private val selectedNotes = HashSet<UUID>()
     private lateinit var noteDao: NoteDao
     private lateinit var notes: LinkedList<Note>
@@ -84,15 +85,29 @@ class NoteListFragment : Fragment() {
     }
 
     private fun setUpListRefresh() {
-        view.refresh.isEnabled = false
+        if (!online) {
+            view.refresh.isEnabled = false
+        }
         lifecycleScope.launch {
             try {
                 val response = apiService.getHealth()
                 if (response.isSuccessful) {
-                    view.refresh.isEnabled = true
-                    syncNotes()
+                    if (!online) {
+                        online = true
+                        view.refresh.isEnabled = true
+                        syncNotes()
+                    }
+                } else {
+                    if (online) {
+                        online = false
+                        view.refresh.isEnabled = false
+                    }
                 }
             } catch (_: IOException) {
+                if (online) {
+                    online = false
+                    view.refresh.isEnabled = false
+                }
             }
         }
         view.refresh.setOnRefreshListener {
@@ -122,8 +137,10 @@ class NoteListFragment : Fragment() {
             viewLifecycleOwner
         ) { _, bundle ->
             val note = bundle.getParcelable<Note>("note")
-            note?.let(listener)
-            syncNotes()
+            note?.let {
+                listener(it)
+                syncNotes()
+            }
         }
     }
 
@@ -203,12 +220,8 @@ class NoteListFragment : Fragment() {
     }
 
     private fun syncNotes() {
-        if (!view.refresh.isEnabled) {
-            return
-        }
-        if (!view.refresh.isRefreshing) {
-            view.refresh.isRefreshing = true
-        }
+        if (!online) return
+        view.refresh.isRefreshing = true
         val session = sessionDao.read()
         val request = SyncNotesRequest(noteDao.read().map { NoteRequest.from(it) })
         lifecycleScope.launch {
