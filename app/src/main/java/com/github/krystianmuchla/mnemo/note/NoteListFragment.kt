@@ -19,8 +19,8 @@ import com.github.krystianmuchla.mnemo.http.ServiceFactory
 import com.github.krystianmuchla.mnemo.http.id.SignInRequest
 import com.github.krystianmuchla.mnemo.http.note.NoteRequest
 import com.github.krystianmuchla.mnemo.http.note.SyncNotesRequest
-import com.github.krystianmuchla.mnemo.id.Session
-import com.github.krystianmuchla.mnemo.id.SessionDao
+import com.github.krystianmuchla.mnemo.id.Cookie
+import com.github.krystianmuchla.mnemo.id.CookieDao
 import com.github.krystianmuchla.mnemo.id.SignInDialogFragment
 import com.github.krystianmuchla.mnemo.instant.InstantFactory
 import com.google.android.material.card.MaterialCardView
@@ -43,7 +43,7 @@ class NoteListFragment : Fragment() {
     private val selectedNotes = HashSet<UUID>()
     private lateinit var noteDao: NoteDao
     private lateinit var notes: LinkedList<Note>
-    private lateinit var sessionDao: SessionDao
+    private lateinit var cookieDao: CookieDao
     private lateinit var apiService: ApiService
     private lateinit var view: NoteListViewBinding
     private lateinit var adapter: NoteListViewAdapter
@@ -58,7 +58,7 @@ class NoteListFragment : Fragment() {
             .sorted(Comparator.comparing<Note?, Instant?> { it.contentsModificationTime }
                 .reversed())
             .collect(Collectors.toCollection { LinkedList() })
-        sessionDao = appDatabase.sessionDao()
+        cookieDao = appDatabase.cookieDao()
         apiService = ServiceFactory.getInstance().create(ApiService::class.java)
     }
 
@@ -159,9 +159,9 @@ class NoteListFragment : Fragment() {
                     if (response.isSuccessful) {
                         val headers = response.headers().toMultimap()
                         val cookies = headers["Set-Cookie"]!!
-                        val session = Session.from(cookies)!!
-                        sessionDao.delete()
-                        sessionDao.create(session)
+                        val cookie = Cookie.from(cookies)
+                        cookieDao.delete()
+                        cookieDao.create(cookie)
                         syncNotes()
                     } else if (response.code() == 401) {
                         Toast.makeText(requireContext(), "Bad credentials", Toast.LENGTH_SHORT)
@@ -222,11 +222,11 @@ class NoteListFragment : Fragment() {
     private fun syncNotes() {
         if (!online) return
         view.refresh.isRefreshing = true
-        val session = sessionDao.read()
+        val cookie = cookieDao.read()
         val request = SyncNotesRequest(noteDao.read().map { NoteRequest.from(it) })
         lifecycleScope.launch {
             try {
-                val response = apiService.syncNotes(session?.asCookie(), request)
+                val response = apiService.syncNotes(cookie?.toString(), request)
                 if (response.isSuccessful) {
                     val responseBody = response.body()!!
                     val externalNotes = responseBody.notes.map { it.asNote() }

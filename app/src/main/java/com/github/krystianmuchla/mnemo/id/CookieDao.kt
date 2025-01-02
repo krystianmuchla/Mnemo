@@ -5,13 +5,13 @@ import androidx.room.Insert
 import androidx.room.Query
 
 @Dao
-interface SessionDao {
+interface CookieDao {
     @Insert
-    fun create(vararg session: Session)
+    fun create(vararg cookie: Cookie)
 
-    @Query("SELECT * FROM session")
-    fun read(): Session?
+    @Query("SELECT * FROM cookie")
+    fun read(): Cookie?
 
-    @Query("DELETE FROM session")
+    @Query("DELETE FROM cookie")
     fun delete()
 }
